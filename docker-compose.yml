@@ -1,0 +1,167 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. INFRASTRUCTURE & DATABASES
+  # ==========================================
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - tubes-network
+
+  db_team:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin_team
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: team_db
+    ports:
+      - "5431:5432"
+    networks:
+      - tubes-network
+
+  db_brief:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin_brief
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: brief_db
+    ports:
+      - "5432:5432"
+    networks:
+      - tubes-network
+
+  db_board:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin_board
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: board_db
+    ports:
+      - "5433:5432"
+    networks:
+      - tubes-network
+
+  db_report:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin_report
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: report_db
+    ports:
+      - "5434:5432"
+    networks:
+      - tubes-network
+
+  hasura:
+    image: hasura/graphql-engine:v2.33.0
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db_report
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgres://admin_report:password123@db_report:5432/report_db
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_ADMIN_SECRET: myadminsecretkey
+    networks:
+      - tubes-network
+
+  # ==========================================
+  # 2. APPLICATION MICROSERVICES
+  # ==========================================
+  board-service:
+    build:
+      context: ../tubes-iae-board-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:3003"
+    depends_on:
+      - db_board
+      - rabbitmq
+    environment:
+      DB_HOST: db_board
+      DB_PORT: 5432
+      DB_USER: admin_board
+      DB_PASSWORD: password123
+      DB_NAME: board_db
+      RABBITMQ_URL: amqp://rabbitmq
+    networks:
+      - tubes-network
+
+  brief-service:
+    build:
+      context: ../tubes-iae-brief-service
+      dockerfile: Dockerfile
+    ports:
+      - "8002:80"
+    depends_on:
+      - db_brief
+      - rabbitmq
+    environment:
+      APP_KEY: base64:Lea4PVZFW+7DKm5MgfQONajQQngxaCNgxs+/PnmZP3Q=
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: db_brief
+      DB_PORT: 5432
+      DB_DATABASE: brief_db
+      DB_USERNAME: admin_brief
+      DB_PASSWORD: password123
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    networks:
+      - tubes-network
+
+  report-service:
+    build:
+      context: ../tubes-iae-report-service
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8000"
+    depends_on:
+      - db_report
+      - rabbitmq
+    environment:
+      DB_HOST: db_report
+      DB_PORT: 5432
+      DB_USER: admin_report
+      DB_PASSWORD: password123
+      DB_NAME: report_db
+      RABBITMQ_URL: amqp://rabbitmq
+    networks:
+      - tubes-network
+
+  team-service:
+    build:
+      context: ../tubes-iae-team-service
+      dockerfile: Dockerfile
+    ports:
+      - "8004:80"
+    depends_on:
+      - db_team
+      - rabbitmq
+    environment:
+      APP_KEY: base64:Lea4PVZFW+7DKm5MgfQONajQQngxaCNgxs+/PnmZP3Q=
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: db_team
+      DB_PORT: 5432
+      DB_DATABASE: team_db
+      DB_USERNAME: admin_team
+      DB_PASSWORD: password123
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    networks:
+      - tubes-network
+
+networks:
+  tubes-network:
+    driver: bridge
